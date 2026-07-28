@@ -1,113 +1,159 @@
 # Qwen3-VL Video Frame Ordering
 
-Qwen3-VL-8B-Instruct를 LoRA로 미세조정해, 문장과 섞인 비디오 프레임 4장을
-시간순으로 정렬하는 코드입니다. 학습, TTA=2 추론, 산출물 검증을 하나의 CLI
-흐름으로 정리했습니다.
+Qwen3-VL-8B-Instruct를 LoRA로 미세조정하여, 주어진 문장과 무작위로 섞인 비디오 프레임 4장을 시간순으로 정렬하는 프로젝트입니다.
 
-최종 제출에 사용된 LoRA는 `checkpoint-2265`이며, 해당 제출 파일의 비공개
-테스트 리더보드 점수는 **0.89528**입니다.
+학습 데이터 생성, LoRA 학습, TTA=2 추론, 제출 파일 생성 및 최종 산출물 검증 과정을 CLI로 실행할 수 있습니다.
 
-## 재현 범위와 기준 산출물
-
-비공개 테스트에는 정답 라벨이 없으므로 이 저장소만으로 0.89528을 직접
-계산할 수는 없습니다. 운영진 평가 서버에 추론 CSV를 제출해야 점수를 확인할
-수 있습니다. 대신 최종 제출에 실제 사용된 아래 세 파일의 SHA-256을
-`checksums.sha256`에 기록했습니다.
-
-| 파일 | SHA-256 앞 12자리 |
-|---|---|
-| `adapter_model.safetensors` | `e00d5e137ed2` |
-| `adapter_config.json` | `622be38bc0af` |
-| `submission_tta2.csv` | `6b9d4bb2a90b` |
-
-주의: 과거 `inference_test_tta2.py`는 TTA 시드에 Python `hash()`를 사용해
-프로세스별로 순열이 달라질 수 있었습니다. 최종 제출 CSV 자체는 위 체크섬으로
-고정해 보존합니다. 통합 `inference.py`는 `crc32(Id) + seed`를 사용하도록
-수정해 이후 실행을 결정적으로 만들었습니다. 따라서 통합 코드의 새 결과와
-과거 CSV가 일부 다를 수 있으며, 둘을 같은 결과라고 주장하지 않습니다.
+최종 제출에는 `checkpoint-2265`의 LoRA 가중치를 사용했으며, 비공개 테스트 리더보드 점수는 **0.89528**입니다.
 
 ## 저장소 구조
 
 ```text
 .
-├── common.py                 # 데이터/순열/프롬프트 공통 로직
-├── config.yaml               # 학습 및 추론 설정
-├── train.py                  # JSONL 생성 + ms-swift 학습
-├── inference.py              # 결정적 TTA=2 추론
-├── download_weights.py       # 공개 URL에서 가중치 다운로드 및 검증
-├── verify_artifacts.py       # 최종 가중치/제출본 체크섬 검증
-├── final_code.ipynb          # 당시 사용한 원본 Colab 노트북
+├── common.py
+├── config.yaml
+├── train.py
+├── inference.py
+├── download_weights.py
+├── verify_artifacts.py
 ├── requirements.txt
-└── adapter_config.json       # 공개 배포용 PEFT 설정
+├── adapter_config.json
+├── checksums.sha256
+└── checkpoint-2265/
+    ├── adapter_config.json
+    └── submission_tta2.csv
 ```
 
-## 권장 환경
+각 파일의 역할은 다음과 같습니다.
+
+- `common.py`: 데이터 처리, 입력 순열 및 프롬프트 공통 로직
+- `config.yaml`: 학습 및 추론 설정
+- `train.py`: 학습 데이터 생성 및 LoRA 학습
+- `inference.py`: TTA=2 추론 및 제출 파일 생성
+- `download_weights.py`: LoRA 가중치 다운로드 및 SHA-256 검증
+- `verify_artifacts.py`: 가중치, 설정 및 기준 제출 파일 검증
+- `requirements.txt`: Python 라이브러리 목록
+- `adapter_config.json`: 최종 LoRA 설정
+- `checksums.sha256`: 최종 산출물의 SHA-256
+- `checkpoint-2265/submission_tta2.csv`: 점수 0.89528을 기록한 기준 제출 파일
+
+## 실행 환경
+
+다음 환경을 기준으로 코드를 구성했습니다.
 
 - Ubuntu 22.04
 - Python 3.10
 - CUDA 지원 NVIDIA GPU
-- 학습: A100 80 GB급 권장
-- 공식 검증 서버: NVIDIA RTX 3090 24 GB 1장, CUDA 12.4,
-  NVIDIA driver 550.54.15
-- 추론은 24 GB VRAM에 맞춰 후보를 8개씩 나누어 계산
-- 기준 학습 패키지: `ms-swift==4.4.2`,
-  `transformers==5.12.1`, `datasets==4.8.4`
+- 학습 권장 GPU: NVIDIA A100 80GB급
+- 운영진 검증 환경: NVIDIA RTX 3090 24GB
+- 기존 추론 실행 환경: NVIDIA RTX 4090 24GB
+- CUDA 12.4
+- NVIDIA Driver 550.54.15
+- `ms-swift==4.4.2`
+- `transformers==5.12.1`
+- `datasets==4.8.4`
 
-GPU/드라이버와 맞는 PyTorch를 먼저 설치한 뒤 나머지를 설치합니다.
+24GB VRAM 환경에서 실행할 수 있도록 추론 시 24개 후보 순열을 8개씩 나누어 계산합니다.
+
+## 설치
+
+먼저 GPU 및 CUDA 환경에 맞는 PyTorch를 설치한 후 나머지 라이브러리를 설치합니다.
 
 ```bash
 python -m venv .venv
 source .venv/bin/activate
+
 pip install --upgrade pip
-# 환경에 맞는 CUDA PyTorch 설치: https://pytorch.org/get-started/locally/
+
+# 실행 환경에 맞는 PyTorch 설치
+# https://pytorch.org/get-started/locally/
+
 pip install -r requirements.txt
 pip uninstall -y torchao
 ```
 
-운영진 검증 환경은 인터넷이 차단됩니다. 설치 패키지, Qwen 기본 모델 가중치,
-LoRA 가중치를 인터넷이 가능한 환경에서 미리 내려받아 검증 서버로 옮겨야
-합니다. 학습과 추론 중에는 외부 API를 호출하지 않습니다.
+대회 규정에 따라 학습 및 추론 코드는 인터넷 연결 없이 실행할 수 있어야 합니다.
+
+따라서 오프라인 환경에서 실행하기 전에 다음 항목을 준비해야 합니다.
+
+- `requirements.txt`에 명시된 Python 패키지
+- `Qwen/Qwen3-VL-8B-Instruct` 기본 모델 가중치
+- GitHub Release에서 제공하는 LoRA 가중치
+- 운영진이 제공한 대회 데이터
+
+필요한 파일을 준비한 이후의 학습 및 추론 과정에서는 인터넷이나 외부 API를 사용하지 않습니다.
 
 ## 데이터 준비
 
-대회 데이터는 라이선스 때문에 저장소에 포함하지 않습니다. 운영진이 제공한
-압축을 풀어 다음 구조로 배치합니다.
+대회 데이터는 저장소에 포함하지 않습니다.
+
+운영진이 제공한 데이터를 다음 구조로 배치합니다.
 
 ```text
 data/
 ├── train.csv
 ├── test.csv
-├── train/<Id>/<image files>
-└── test/<Id>/<image files>
+├── train/
+│   └── <Id>/
+│       └── <image files>
+└── test/
+    └── <Id>/
+        └── <image files>
 ```
 
-CSV에는 `Id`, `Sentence`, `Input_1`~`Input_4` 열이 필요하며, `train.csv`에는
-추가로 `Answer`가 필요합니다.
+CSV에 필요한 열은 다음과 같습니다.
 
-## 가중치 준비
+- 공통: `Id`, `Sentence`, `Input_1`, `Input_2`, `Input_3`, `Input_4`
+- 학습 데이터 추가 열: `Answer`
 
-`adapter_model.safetensors`는 약 840 MB라 일반 GitHub 파일 제한(100 MB)을
-초과합니다. 공개 다운로드 URL을 만든 뒤 다음처럼 받습니다. 게시 전에 아래
-`<PUBLIC_WEIGHT_URL>`을 실제 GitHub Release/Hugging Face URL로 교체해야 합니다.
+## 기본 모델 준비
+
+사용한 기본 모델은 다음과 같습니다.
+
+```text
+Qwen/Qwen3-VL-8B-Instruct
+```
+
+공식 모델 페이지:
+
+https://huggingface.co/Qwen/Qwen3-VL-8B-Instruct
+
+인터넷이 가능한 환경에서 기본 모델을 미리 다운로드한 후 다음과 같이 배치합니다.
+
+```text
+models/
+└── Qwen3-VL-8B-Instruct/
+```
+
+학습 및 추론 명령의 `--model` 인자에는 위 로컬 경로를 전달합니다.
+
+## LoRA 가중치 준비
+
+최종 제출에 사용한 LoRA 가중치는 GitHub Release에서 직접 다운로드할 수 있습니다.
+
+https://github.com/yeonseochoi/snu_ai_challenge/releases/download/v1.0.0/adapter_model.safetensors
+
+다음 명령을 실행하면 가중치를 다운로드하고 SHA-256을 자동으로 확인합니다.
 
 ```bash
 python download_weights.py \
-  --url "<PUBLIC_WEIGHT_URL>" \
+  --url "https://github.com/yeonseochoi/snu_ai_challenge/releases/download/v1.0.0/adapter_model.safetensors" \
   --output checkpoints/final/adapter_model.safetensors
+
 cp adapter_config.json checkpoints/final/adapter_config.json
 ```
 
-다운로더는 파일을 최종 위치로 옮기기 전에 SHA-256을 검사합니다.
+다운로드한 파일은 체크섬 검증을 통과한 경우에만 최종 경로에 저장됩니다.
+
+최종 LoRA 가중치의 SHA-256은 다음과 같습니다.
+
+```text
+e00d5e137ed29a8487c963c534b52ce9196faa489517fb00e24fd2f3a5554513
+```
 
 ## 학습
 
-전체 학습:
-
-```bash
-python train.py --data-dir data --output-dir outputs
-```
-
-인터넷이 차단된 환경에서는 기본 모델의 로컬 경로를 지정합니다.
+전체 학습은 다음 명령으로 실행합니다.
 
 ```bash
 python train.py \
@@ -116,22 +162,53 @@ python train.py \
   --model models/Qwen3-VL-8B-Instruct
 ```
 
-데이터 변환과 명령 구성을 빠르게 확인:
+전체 학습 전에 데이터 처리 과정만 간단히 확인하려면 다음 명령을 실행합니다.
 
 ```bash
-python train.py --data-dir data --output-dir outputs \
-  --smoke-test --prepare-only
+python train.py \
+  --data-dir data \
+  --output-dir outputs \
+  --model models/Qwen3-VL-8B-Instruct \
+  --smoke-test \
+  --prepare-only
 ```
 
-고정 설정은 `config.yaml`에 있습니다. 원본과 동일하게 seed 42로 train의
-5%를 validation으로 분리하고, 샘플당 identity 포함 4개 입력 순열로
-증강하며, rank 64/alpha 128 LoRA를 1 epoch 학습합니다. `ms-swift`가 생성한
-마지막 `checkpoint-*`의 adapter 파일을 `checkpoints/final/`로 복사합니다.
+주요 학습 설정은 `config.yaml`에 저장되어 있습니다.
 
-학습은 CUDA/cuDNN 및 병렬 커널의 영향으로 가중치 바이트 단위까지 완전히
-같아진다고 보장할 수 없습니다. 공개된 최종 가중치는 결과 재현의 기준입니다.
+- Random seed: 42
+- Validation 비율: Train 데이터의 5%
+- 데이터 증강: 원본 순열을 포함한 샘플당 4개 입력 순열
+- LoRA rank: 64
+- LoRA alpha: 128
+- Epoch: 1
+- Base model: `Qwen/Qwen3-VL-8B-Instruct`
+
+학습이 완료되면 `ms-swift`가 생성한 최종 `checkpoint-*` 디렉터리에서 다음 파일을 복사합니다.
+
+```text
+adapter_model.safetensors
+adapter_config.json
+```
+
+복사 예시는 다음과 같습니다.
+
+```bash
+mkdir -p checkpoints/final
+
+cp outputs/<checkpoint-directory>/adapter_model.safetensors \
+  checkpoints/final/adapter_model.safetensors
+
+cp outputs/<checkpoint-directory>/adapter_config.json \
+  checkpoints/final/adapter_config.json
+```
+
+CUDA, cuDNN 및 GPU 연산의 비결정성으로 인해 새로 학습한 가중치가 공개 가중치와 바이트 단위로 완전히 일치하지 않을 수 있습니다.
+
+최종 제출 결과를 확인할 때는 GitHub Release에 공개된 LoRA 가중치를 사용하는 것을 권장합니다.
 
 ## 테스트 추론
+
+테스트 추론은 다음 명령으로 실행합니다.
 
 ```bash
 python inference.py \
@@ -142,25 +219,55 @@ python inference.py \
   --resume
 ```
 
-`--resume`은 `outputs/submission_tta2_partial.csv`가 있을 때 완료된 ID를
-건너뜁니다. 기존 24 GB GPU 전체 실행 기록은 약 12분으로, 대회 제한인
-24시간 이내입니다.
+최종 제출 파일은 다음 위치에 저장됩니다.
 
-## 대회 규칙 준수
+```text
+outputs/submission_tta2.csv
+```
 
-- Python으로 학습 및 추론하며 추론 중 인터넷이나 외부 상용 API를 사용하지
-  않습니다.
-- 학습에는 운영진이 제공한 train 데이터만 사용합니다.
-- 단일 `Qwen/Qwen3-VL-8B-Instruct` 모델과 하나의 LoRA adapter만 사용하며
-  모델 앙상블은 사용하지 않습니다.
-- LoRA와 동일 모델에 대한 TTA=2만 사용합니다.
-- 테스트 데이터 또는 수작업 테스트 라벨을 학습에 사용하지 않습니다.
-- 모든 입출력 경로는 CLI로 전달하는 상대경로이며 UTF-8 소스코드입니다.
-- 기본 모델과 LoRA를 포함해 전체 모델 크기는 80 GB 미만이어야 합니다.
+`--resume` 옵션을 사용하면 이전 실행에서 완료된 샘플을 건너뛰고 추론을 이어서 진행합니다.
 
-## 최종 산출물 확인
+중간 결과는 다음 위치에 저장됩니다.
 
-GitHub에 포함된 설정과 기준 제출본을 검사하려면:
+```text
+outputs/submission_tta2_partial.csv
+```
+
+기존 RTX 4090 24GB 환경에서 전체 테스트 추론에는 약 12분이 소요되었습니다.
+
+운영진의 RTX 3090 24GB 환경에서도 실행할 수 있도록 후보 순열을 8개씩 나누어 계산하도록 구성했습니다.
+
+## TTA 설정과 재현성
+
+추론에는 동일한 기본 모델과 동일한 LoRA adapter를 이용한 TTA=2를 적용합니다.
+
+과거 제출에 사용한 추론 코드에서는 TTA 순열 생성에 Python의 `hash()`를 사용했습니다. Python의 `hash()`는 실행 프로세스에 따라 값이 달라질 수 있으므로, TTA 순열 역시 실행마다 달라질 가능성이 있었습니다.
+
+현재 `inference.py`에서는 다음 값을 이용해 ID별 TTA 순열을 결정적으로 생성합니다.
+
+```text
+crc32(Id) + seed
+```
+
+따라서 현재 통합 코드로 생성한 결과와 과거 최종 제출 CSV가 일부 다를 수 있습니다.
+
+비공개 테스트 리더보드 점수 0.89528에 사용된 제출 파일은 다음 경로에 별도로 보존했습니다.
+
+```text
+checkpoint-2265/submission_tta2.csv
+```
+
+## 최종 산출물 검증
+
+최종 제출에 사용된 산출물의 SHA-256은 다음과 같습니다.
+
+| 파일 | SHA-256 |
+|---|---|
+| `adapter_model.safetensors` | `e00d5e137ed29a8487c963c534b52ce9196faa489517fb00e24fd2f3a5554513` |
+| `adapter_config.json` | `622be38bc0afa35f9fdb5224b450c193b121d4635f4232afb0b8b3f1e56b4af5` |
+| `submission_tta2.csv` | `6b9d4bb2a90bcc6a162bf58d47888e1c202315607a5179c9b653a03459a08ab8` |
+
+저장소에 포함된 설정 파일과 기준 제출 파일은 다음 명령으로 확인할 수 있습니다.
 
 ```bash
 python verify_artifacts.py \
@@ -168,7 +275,7 @@ python verify_artifacts.py \
   --submission checkpoint-2265/submission_tta2.csv
 ```
 
-다운로드한 가중치까지 필수로 검사하려면:
+다운로드한 LoRA 가중치까지 함께 확인하려면 다음 명령을 실행합니다.
 
 ```bash
 python verify_artifacts.py \
@@ -177,17 +284,26 @@ python verify_artifacts.py \
   --require-weights
 ```
 
-새 추론 결과가 과거 제출본과 바이트 단위로 같은지도 별도로 확인할 수 있습니다.
+새로 생성한 제출 파일의 체크섬은 다음 명령으로 확인할 수 있습니다.
 
 ```bash
 sha256sum outputs/submission_tta2.csv
-# 기준: 6b9d4bb2a90bcc6a162bf58d47888e1c202315607a5179c9b653a03459a08ab8
 ```
 
-## 공개 전 체크리스트
+비공개 테스트 데이터에는 정답이 포함되어 있지 않기 때문에 이 저장소만으로 리더보드 점수 0.89528을 직접 계산할 수는 없습니다.
 
-1. 가중치를 GitHub Release 또는 Hugging Face에 공개한다.
-2. README의 `<PUBLIC_WEIGHT_URL>`을 실제 URL로 바꾼다.
-3. 새 환경에서 다운로드, 체크섬 검증, 추론을 한 번 실행한다.
-4. 저장소에 대회 원본 데이터가 포함되지 않았는지 확인한다.
-5. 운영진 평가 서버에서 생성 CSV의 점수를 확인한다.
+점수를 확인하려면 생성한 제출 CSV를 운영진 평가 시스템에 제출해야 합니다.
+
+## 대회 규칙 준수 사항
+
+- Python 기반 학습 및 추론
+- 운영진이 제공한 Train 데이터만 학습에 사용
+- 외부 데이터 및 수작업 테스트 라벨 미사용
+- 학습 및 추론 중 외부 상용 API 미사용
+- 단일 `Qwen/Qwen3-VL-8B-Instruct` 모델 사용
+- 단일 LoRA adapter 사용
+- 모델 앙상블 미사용
+- 동일 모델에 대한 TTA=2 적용
+- 데이터 입출력 경로를 CLI 인자로 전달
+- UTF-8 소스코드 사용
+- 기본 모델과 LoRA를 포함한 전체 모델 크기 80GB 미만
