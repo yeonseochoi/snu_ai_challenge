@@ -39,19 +39,19 @@ Qwen3-VL-8B-Instruct를 LoRA로 미세조정하여, 주어진 문장과 무작�
 
 ## 실행 환경
 
-다음 환경을 기준으로 코드를 구성했습니다.
+최종 모델은 다음 Google Colab 환경에서 학습했습니다.
 
-- Ubuntu 22.04
-- Python 3.10
-- CUDA 지원 NVIDIA GPU
-- 학습 권장 GPU: NVIDIA A100 80GB급
-- 운영진 검증 환경: NVIDIA RTX 3090 24GB
-- 기존 추론 실행 환경: NVIDIA RTX 4090 24GB
-- CUDA 12.4
-- NVIDIA Driver 550.54.15
+- Google Colab Linux
+- Python 3.12
+- NVIDIA A100-SXM4 40GB
+- `torch==2.11.0+cu128`
+- CUDA 12.8 PyTorch 빌드
 - `ms-swift==4.4.2`
 - `transformers==5.12.1`
 - `datasets==4.8.4`
+- `peft==0.19.1`
+
+기존 전체 테스트 추론은 NVIDIA RTX 4090 24GB 환경에서 실행했습니다. 운영진 환경에서는 Python 3.12와 CUDA 지원 NVIDIA GPU를 사용하고, GPU 및 CUDA 환경에 맞는 PyTorch 2.11.0 빌드를 설치합니다.
 
 24GB VRAM 환경에서 실행할 수 있도록 추론 시 24개 후보 순열을 8개씩 나누어 계산합니다.
 
@@ -140,7 +140,8 @@ python download_weights.py \
   --url "https://github.com/yeonseochoi/snu_ai_challenge/releases/download/v1.0.0/adapter_model.safetensors" \
   --output checkpoints/final/adapter_model.safetensors
 
-cp adapter_config.json checkpoints/final/adapter_config.json
+cp checkpoint-2265/adapter_config.json \
+  checkpoints/final/adapter_config.json
 ```
 
 다운로드한 파일은 체크섬 검증을 통과한 경우에만 최종 경로에 저장됩니다.
@@ -264,7 +265,7 @@ checkpoint-2265/submission_tta2.csv
 | 파일 | SHA-256 |
 |---|---|
 | `adapter_model.safetensors` | `e00d5e137ed29a8487c963c534b52ce9196faa489517fb00e24fd2f3a5554513` |
-| `adapter_config.json` | `622be38bc0afa35f9fdb5224b450c193b121d4635f4232afb0b8b3f1e56b4af5` |
+| `adapter_config.json` | `513a8db6560852afd5e03f6bad8a5d624607916289c7da18dcda924dad8a743e` |
 | `submission_tta2.csv` | `6b9d4bb2a90bcc6a162bf58d47888e1c202315607a5179c9b653a03459a08ab8` |
 
 저장소에 포함된 설정 파일과 기준 제출 파일은 다음 명령으로 확인할 수 있습니다.
@@ -307,3 +308,15 @@ sha256sum outputs/submission_tta2.csv
 - 데이터 입출력 경로를 CLI 인자로 전달
 - UTF-8 소스코드 사용
 - 기본 모델과 LoRA를 포함한 전체 모델 크기 80GB 미만
+
+## 모델 크기
+
+추론에 필요한 모델 파일의 크기는 다음과 같으며, 합계는 80GB 제한보다 작습니다.
+
+| 구성 | 크기 |
+|---|---:|
+| `Qwen/Qwen3-VL-8B-Instruct` 기본 모델 | 약 17.5GB |
+| `adapter_model.safetensors` LoRA 가중치 | 840,009,216 bytes (약 0.84GB) |
+| 합계 | 약 18.34GB |
+
+LoRA 가중치 크기는 GitHub Release에 게시한 파일을 기준으로 측정했습니다. 기본 모델 크기는 공식 Hugging Face 모델 저장소의 표시값을 기준으로 합니다.

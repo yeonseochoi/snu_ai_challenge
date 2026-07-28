@@ -12,7 +12,7 @@ import pandas as pd
 
 EXPECTED = {
     "adapter_model.safetensors": "e00d5e137ed29a8487c963c534b52ce9196faa489517fb00e24fd2f3a5554513",
-    "adapter_config.json": "622be38bc0afa35f9fdb5224b450c193b121d4635f4232afb0b8b3f1e56b4af5",
+    "adapter_config.json": "513a8db6560852afd5e03f6bad8a5d624607916289c7da18dcda924dad8a743e",
     "submission_tta2.csv": "6b9d4bb2a90bcc6a162bf58d47888e1c202315607a5179c9b653a03459a08ab8",
 }
 
