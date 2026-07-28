@@ -1,0 +1,13 @@
+# Training environment used by final_code.ipynb
+ms-swift==4.4.2
+transformers==5.12.1
+datasets==4.8.4
+accelerate
+peft
+qwen-vl-utils
+pandas
+Pillow
+PyYAML
+safetensors
+tqdm
+

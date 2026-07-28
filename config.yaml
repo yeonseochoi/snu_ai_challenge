@@ -1,0 +1,27 @@
+model:
+  id: Qwen/Qwen3-VL-8B-Instruct
+  min_pixels: 100352       # 128 * 28 * 28
+  max_pixels: 250880       # 320 * 28 * 28
+
+data:
+  seed: 42
+  val_ratio: 0.05
+
+training:
+  run_name: qwen3vl8b_v5_r64_paug4_px320
+  k_aug: 4
+  lora_rank: 64
+  lora_alpha: 128
+  lora_dropout: 0.05
+  learning_rate: 1.0e-4
+  vit_learning_rate: 2.0e-5
+  epochs: 1
+  batch_size: 1
+  gradient_accumulation_steps: 16
+  save_steps: 200
+
+inference:
+  k_tta: 2
+  seed: 0
+  candidate_chunk_size: 8
+

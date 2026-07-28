@@ -1,0 +1,21 @@
+.venv/
+__pycache__/
+*.py[cod]
+*.log
+*_partial.csv
+outputs/
+work/
+
+# Competition data are not redistributable in this repository.
+data/
+
+# Large weights are distributed separately (see README).
+checkpoints/
+checkpoint-*/
+*.safetensors
+
+# Keep only the exact final metadata and scored submission as reference artifacts.
+!checkpoint-2265/
+checkpoint-2265/*
+!checkpoint-2265/adapter_config.json
+!checkpoint-2265/submission_tta2.csv
